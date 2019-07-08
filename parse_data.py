@@ -8,7 +8,7 @@ class CorpusProcess:
     def __init__(self):
         self.train_corpus_path = "199801_people_s_daily.txt"
         self.process_corpus_path = "result-rmrb.txt"
-        self._maps = {u't': u'T',u'nr': u'PER', u'nt': u'ORG',u'ns': u'LOC'}
+        self._maps = {u't': u'T',u'nr': u'PER', u'ns': u'LOC',u'nt': u'ORG',u"i":"IOM"}
 
     def read_corpus_from_file(self, file_path):
         f = codecs.open(file_path, 'r','utf-8')#,encoding='utf-8'
@@ -134,7 +134,16 @@ class CorpusProcess:
             return u'I_{}'.format(tag)
         else:
             return tag
-
+    def tag_perform_new(self, tag, index,length_index):
+        """标签使用BMEWO模式"""
+        if index == 0 and tag != u'O':
+            return u'B_{}'.format(tag)
+        elif tag != u'O' and index != length_index-1:
+            return u'M_{}'.format(tag)
+        elif index == length_index-1 and tag != u'O':
+            return u'E_{}'.format(tag)
+        else:
+            return tag
     def pos_perform(self, pos):
         """去除词性携带的标签先验知识"""
         if pos in self._maps.keys() and pos != u't':
@@ -156,7 +165,7 @@ class CorpusProcess:
         tag_seq = [[self.pos_to_tag(p) for p in pos] for pos in pos_seq]
         self.pos_seq = [[[pos_seq[index][i] for _ in range(len(words_seq[index][i]))]
                         for i in range(len(pos_seq[index]))] for index in range(len(pos_seq))]
-        self.tag_seq = [[[self.tag_perform(tag_seq[index][i], w) for w in range(len(words_seq[index][i]))]
+        self.tag_seq = [[[self.tag_perform_new(tag_seq[index][i], w) for w in range(len(words_seq[index][i]))]
                         for i in range(len(tag_seq[index]))] for index in range(len(tag_seq))]
         self.pos_seq = [[u'un']+[self.pos_perform(p) for pos in pos_seq for p in pos]+[u'un'] for pos_seq in self.pos_seq]
         self.tag_seq = [[t for tag in tag_seq for t in tag] for tag_seq in self.tag_seq]
@@ -168,19 +177,23 @@ class CorpusProcess:
         for index in range(len(word_grams)):
             for i in range(len(word_grams[index])):
                 word_gram = word_grams[index][i]
-                feature = {u'w-1': word_gram[0], u'w': word_gram[1], u'w+1': word_gram[2],
-                           u'w-1:w': word_gram[0]+word_gram[1], u'w:w+1': word_gram[1]+word_gram[2],
-                           # u'p-1': self.pos_seq[index][i], u'p': self.pos_seq[index][i+1],
-                           # u'p+1': self.pos_seq[index][i+2],
-                           # u'p-1:p': self.pos_seq[index][i]+self.pos_seq[index][i+1],
-                           # u'p:p+1': self.pos_seq[index][i+1]+self.pos_seq[index][i+2],
-                           u'bias': 1.0}
+                #feature = {u'w-1': word_gram[0], u'w': word_gram[1], u'w+1': word_gram[2],
+                           #u'w-1:w': word_gram[0]+word_gram[1], u'w:w+1': word_gram[1]+word_gram[2],
+                           ## u'p-1': self.pos_seq[index][i], u'p': self.pos_seq[index][i+1],
+                           ## u'p+1': self.pos_seq[index][i+2],
+                           ## u'p-1:p': self.pos_seq[index][i]+self.pos_seq[index][i+1],
+                           ## u'p:p+1': self.pos_seq[index][i+1]+self.pos_seq[index][i+2],
+                           #u'bias': 1.0}
+                feature = {u'w-2':word_gram[0],u'w-1':word_gram[1],u'w':word_gram[2],u'w+1':word_gram[3],
+                                       u'w+2':word_gram[4],u'w-2:w-1:w':word_gram[0]+word_gram[1]+word_gram[2],u'w-1:w:w+1':word_gram[1]+word_gram[2]+word_gram[3],
+                                       u'w:w+1:w+2':word_gram[2]+word_gram[3]+word_gram[4],u'w-1:w':word_gram[1]+word_gram[2],
+                                       u'w:w+1':word_gram[2]+word_gram[3]}
                 feature_list.append(feature)
             features.append(feature_list)
             feature_list = []
         return features
     @classmethod
-    def segment_by_window(self, words_list=None, window=3):
+    def segment_by_window(self, words_list=None, window=5):
         """窗口切分"""
         words = []
         begin, end = 0, window
